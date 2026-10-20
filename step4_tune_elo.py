@@ -1,18 +1,4 @@
-"""
-Step 4: Tune Elo constants (K-factor and home advantage) properly.
 
-Protocol (no test-set peeking):
-  - TRAIN : 1995-96 .. 2015-16   (21 seasons)
-  - VAL   : 2016-17 .. 2020-21   (5 seasons)  <- used to CHOOSE (K, HOME_ADV)
-  - TEST  : 2021-22 .. 2025-26   (5 seasons)  <- touched ONCE at the end
-
-For each (K, HOME_ADV) pair:
-  1. Recompute Elo over the full history (Elo only uses past matches, so this is leak-free).
-  2. Fit logistic regression on TRAIN seasons only.
-  3. Score log-loss on VAL seasons.
-The best pair by validation log-loss is then re-evaluated once on TEST,
-using the same training window as before (all seasons before the test seasons).
-"""
 import itertools
 from collections import defaultdict, deque
 
@@ -24,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 
 INITIAL_RATING = 1500
 
-# ---------------------------------------------------------------- load data
+
 df = pd.read_csv('LaLiga_Matches.csv')
 df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
 df = df.sort_values('Date').reset_index(drop=True)
@@ -43,10 +29,10 @@ res = df['FTR'].to_numpy()
 season_arr = df['Season'].to_numpy()
 n = len(df)
 
-# ------------------------------------------- features independent of Elo (once)
+
 last5 = defaultdict(lambda: deque(maxlen=5))
 h2h = defaultdict(lambda: deque(maxlen=5))
-other = np.zeros((n, 6))  # Home_form, Away_form, Form_diff, H2H_home, H2H_away, H2H_games
+other = np.zeros((n, 6))  
 
 for i in range(n):
     h, a, r = home[i], away[i], res[i]
@@ -65,7 +51,7 @@ for i in range(n):
     dq.append((a, ap))
 
 
-# ----------------------------------------------------------------- Elo helper
+
 def elo_diff_series(k, home_adv):
     """Pre-match Elo_home - Elo_away for every match, chronological, leak-free."""
     ratings = {}
@@ -94,7 +80,7 @@ def evaluate(k, home_adv, fit_seasons, eval_seasons):
             accuracy_score(res[eval_mask], preds))
 
 
-# ----------------------------------------------------------------- grid search
+
 K_GRID = [10, 15, 20, 25, 30, 40, 50]
 HA_GRID = [0, 25, 50, 75, 100, 125, 150]
 
@@ -116,8 +102,8 @@ print(f"\nBest on validation: K={best_k}, HomeAdv={best_ha}  "
       f"(val log-loss {best['val_logloss']:.4f}, acc {best['val_acc']:.4f})")
 print(f"Old defaults K=20, HomeAdv=100 on validation: log-loss {old_ll:.4f}, acc {old_acc:.4f}")
 
-# ----------------------------------------------- single final look at TEST set
-fit_for_test = seasons[:-5]  # same training window as the earlier results
+
+fit_for_test = seasons[:-5] 
 tl_old, ta_old = evaluate(20, 100, fit_for_test, test_seasons)
 tl_new, ta_new = evaluate(best_k, best_ha, fit_for_test, test_seasons)
 
@@ -131,7 +117,7 @@ pd.DataFrame([
     {'config': f'tuned K={best_k} HA={best_ha}', 'test_acc': ta_new, 'test_logloss': tl_new},
 ]).to_csv('tuning_test_comparison.csv', index=False)
 
-# ----------------------------------------------------------------- heatmap
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
